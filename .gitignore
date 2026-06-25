@@ -1,0 +1,52 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+web_resources/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+
+# IDE configs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python environments & compilation caches
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.ipynb_checkpoints/
+ml-service/dataset/placement_dataset.csv
+ml-service/*.pkl
+ml-service/placement_model.pkl
+ml-service/role_model.pkl
+ml-service/vectorizer.pkl
+ml-service/role_descriptions.pkl
+
+# Multer uploads
+server/uploads/*
+!server/uploads/.gitkeep
