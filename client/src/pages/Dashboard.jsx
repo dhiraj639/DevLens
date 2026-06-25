@@ -53,15 +53,57 @@ const Dashboard = () => {
     { name: 'Placement Readiness', value: placementReadiness, fill: '#10b981' }
   ];
 
-  // Radar charts metrics mapping based on user inputs
-  const radarData = [
-    { subject: 'Frontend', A: targetRole.includes('Frontend') || targetRole.includes('MERN') ? 85 : 40, fullMark: 100 },
-    { subject: 'Backend', A: targetRole.includes('Backend') || targetRole.includes('MERN') ? 80 : 35, fullMark: 100 },
-    { subject: 'DSA', A: leetcodeScore > 0 ? leetcodeScore : 45, fullMark: 100 },
-    { subject: 'DevOps', A: targetRole.includes('DevOps') ? 90 : 35, fullMark: 100 },
-    { subject: 'AI Tech', A: targetRole.includes('ML') || targetRole.includes('Science') ? 85 : 50, fullMark: 100 },
-    { subject: 'Comm.', A: atsScore > 0 ? atsScore : 75, fullMark: 100 },
-  ];
+  // Radar charts metrics mapping dynamically based on target role
+  const getRadarData = (role, dsaScore, communicationScore) => {
+    const roleLower = role.toLowerCase();
+    
+    // 1. Data Science / ML / Data Engineering / Data Analytics
+    if (
+      roleLower.includes('data') || 
+      roleLower.includes('ml') || 
+      roleLower.includes('machine') || 
+      roleLower.includes('scientist') || 
+      roleLower.includes('analyst')
+    ) {
+      return [
+        { subject: 'Data Analysis', A: communicationScore > 0 ? Math.round(communicationScore * 0.95) : 75, fullMark: 100 },
+        { subject: 'ML Modeling', A: roleLower.includes('ml') || roleLower.includes('scientist') ? 85 : 45, fullMark: 100 },
+        { subject: 'Data Pipelines', A: roleLower.includes('engineer') || roleLower.includes('data') ? 88 : 50, fullMark: 100 },
+        { subject: 'DSA & Python', A: dsaScore > 0 ? dsaScore : 55, fullMark: 100 },
+        { subject: 'MLOps & SQL', A: roleLower.includes('engineer') ? 80 : 40, fullMark: 100 },
+        { subject: 'Comm.', A: communicationScore > 0 ? communicationScore : 75, fullMark: 100 },
+      ];
+    }
+    
+    // 2. DevOps / Cloud / SRE
+    if (
+      roleLower.includes('devops') || 
+      roleLower.includes('cloud') || 
+      roleLower.includes('sre') || 
+      roleLower.includes('infrastructure')
+    ) {
+      return [
+        { subject: 'CI/CD Pipelines', A: 90, fullMark: 100 },
+        { subject: 'Cloud & IaC', A: 85, fullMark: 100 },
+        { subject: 'Containers', A: 88, fullMark: 100 },
+        { subject: 'Scripting', A: dsaScore > 0 ? Math.round(dsaScore * 0.9) : 60, fullMark: 100 },
+        { subject: 'SysAdmin', A: 75, fullMark: 100 },
+        { subject: 'Comm.', A: communicationScore > 0 ? communicationScore : 75, fullMark: 100 },
+      ];
+    }
+    
+    // 3. Default: Full Stack / Web Developer / Frontend / Backend
+    return [
+      { subject: 'Frontend', A: roleLower.includes('frontend') || roleLower.includes('mern') ? 85 : 40, fullMark: 100 },
+      { subject: 'Backend', A: roleLower.includes('backend') || roleLower.includes('mern') ? 80 : 35, fullMark: 100 },
+      { subject: 'DSA', A: dsaScore > 0 ? dsaScore : 45, fullMark: 100 },
+      { subject: 'DevOps', A: roleLower.includes('devops') ? 90 : 35, fullMark: 100 },
+      { subject: 'AI Tech', A: roleLower.includes('ml') || roleLower.includes('science') ? 85 : 50, fullMark: 100 },
+      { subject: 'Comm.', A: communicationScore > 0 ? communicationScore : 75, fullMark: 100 },
+    ];
+  };
+
+  const radarData = getRadarData(targetRole, leetcodeScore, atsScore);
 
   return (
     <div className="space-y-8 relative z-10 w-full">
