@@ -2,6 +2,7 @@ const { generateAIContent } = require('../services/aiService');
 const GithubAnalysis = require('../models/GithubAnalysis');
 const LeetcodeAnalysis = require('../models/LeetcodeAnalysis');
 const ResumeAnalysis = require('../models/ResumeAnalysis');
+const ChatMessage = require('../models/ChatMessage');
 const { localGithubData } = require('./githubController');
 const { localLeetcodeData } = require('./leetcodeController');
 const { localResumeData } = require('./resumeController');
@@ -77,13 +78,14 @@ const getAIRoadmap = async (req, res) => {
 
 const chatWithAssistant = async (req, res) => {
   const { message } = req.body;
-  if (!message) {
-    return res.status(400).json({ message: "Message is required" });
+  if (!message && !req.file) {
+    return res.status(400).json({ message: "Message or file is required" });
   }
 
   try {
     const context = await gatherProfileContext(req);
-    context.message = message;
+    context.message = message || "";
+    context.file = req.file; // Pass uploaded file to AI context
     
     // Add simple placement score context to chatbot
     const github_score = context.githubScore;
@@ -91,8 +93,55 @@ const chatWithAssistant = async (req, res) => {
     const ats_score = context.atsScore;
     context.placementScore = Math.round((github_score + dsa_score + ats_score) / 3) || 50;
 
+    // Save User message to DB
+    const userMsg = new ChatMessage({
+      userId: req.user._id,
+      sender: 'user',
+      text: message || "",
+      file: req.file ? {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      } : null
+    });
+    await userMsg.save();
+
     const reply = await generateAIContent('chat', context);
-    res.status(200).json({ reply });
+
+    // Save AI response to DB
+    const aiMsg = new ChatMessage({
+      userId: req.user._id,
+      sender: 'ai',
+      text: reply
+    });
+    await aiMsg.save();
+
+    res.status(200).json({ 
+      reply,
+      file: req.file ? {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      } : null
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const getChatHistory = async (req, res) => {
+  try {
+    const messages = await ChatMessage.find({ userId: req.user._id }).sort({ timestamp: 1 });
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const clearChatHistory = async (req, res) => {
+  try {
+    await ChatMessage.deleteMany({ userId: req.user._id });
+    res.status(200).json({ message: "Chat history cleared successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -102,5 +151,7 @@ module.exports = {
   getAIReview,
   getAIGapAnalysis,
   getAIRoadmap,
-  chatWithAssistant
+  chatWithAssistant,
+  getChatHistory,
+  clearChatHistory
 };

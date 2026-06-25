@@ -4,38 +4,159 @@ const axios = require('axios');
  * AI service providing profile reviews, gap analysis, roadmaps, and chatbot replies.
  * Uses Gemini API if GEMINI_API_KEY is configured, else falls back to a high-fidelity local generator.
  */
-const generateAIContent = async (type, context) => {
+/**
+ * Helper to call Gemini API
+ */
+const callGemini = async (prompt) => {
   const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured in environment.");
+  }
+  const modelName = process.env.GEMINI_MODEL || "gemini-pro";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+  const response = await axios.post(
+    url,
+    {
+      contents: [{ parts: [{ text: prompt }] }]
+    },
+    {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 15000
+    }
+  );
+
+  if (
+    response.data &&
+    response.data.candidates &&
+    response.data.candidates[0] &&
+    response.data.candidates[0].content &&
+    response.data.candidates[0].content.parts &&
+    response.data.candidates[0].content.parts[0]
+  ) {
+    const text = response.data.candidates[0].content.parts[0].text;
+    if (text) return text;
+  }
+  throw new Error("Invalid or empty response from Gemini API");
+};
+
+/**
+ * Helper to call Groq API (OpenAI-compatible)
+ */
+const callGroq = async (prompt) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY is not configured in environment.");
+  }
+  const modelName = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const url = "https://api.groq.com/openai/v1/chat/completions";
+
+  const response = await axios.post(
+    url,
+    {
+      model: modelName,
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      stream: false
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      timeout: 15000
+    }
+  );
+
+  if (
+    response.data &&
+    response.data.choices &&
+    response.data.choices[0] &&
+    response.data.choices[0].message
+  ) {
+    const text = response.data.choices[0].message.content;
+    if (text) return text;
+  }
+  throw new Error("Invalid or empty response from Groq API");
+};
+
+/**
+ * AI service providing profile reviews, gap analysis, roadmaps, and chatbot replies.
+ * Uses configured preferred provider (Gemini or Groq), falls back dynamically if preferred fails,
+ * and uses local rule-based simulation as final fallback.
+ */
+const generateAIContent = async (type, context) => {
   const targetRole = context.targetRole || "MERN Developer";
   
-  if (apiKey) {
-    try {
-      // Build the prompt based on request type
-      let prompt = "";
-      if (type === 'review') {
-        prompt = `Review this developer profile. Target Role: ${targetRole}. Github Score: ${context.githubScore}/100, DSA Score: ${context.dsaScore}/100, ATS Resume Score: ${context.atsScore}/100. Return JSON/Text summarizing: Strengths, Weaknesses, Interview Readiness rating out of 10, and 3 key recommendations.`;
-      } else if (type === 'gap-analysis') {
-        prompt = `Compare this developer's skills [${(context.skills || []).join(', ')}] with the required skills for target role: ${targetRole}. List missing skills and action steps.`;
-      } else if (type === 'roadmap') {
-        prompt = `Generate a 30, 60, 90-day learning roadmap to transition to target role: ${targetRole} from current skills: [${(context.skills || []).join(', ')}]. Format in markdown.`;
-      } else {
-        prompt = `You are a career assistant for developers. The user is a developer targeting the role of ${targetRole} with Placement readiness score: ${context.placementScore}%. Answer their query: "${context.message}". Keep it professional and helpful.`;
-      }
-
-      const response = await axios.post(
-        `https://generativetapes.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, // Note: standard endpoint is generativelanguage.googleapis.com, we use axios wrapper
-        {
-          contents: [{ parts: [{ text: prompt }] }]
-        },
-        { headers: { 'Content-Type': 'application/json' } }
-      );
+  // Build the prompt based on request type
+  let prompt = "";
+  if (type === 'review') {
+    prompt = `Review this developer profile. Target Role: ${targetRole}. Github Score: ${context.githubScore}/100, DSA Score: ${context.dsaScore}/100, ATS Resume Score: ${context.atsScore}/100. Return JSON/Text summarizing: Strengths, Weaknesses, Interview Readiness rating out of 10, and 3 key recommendations.`;
+  } else if (type === 'gap-analysis') {
+    prompt = `Compare this developer's skills [${(context.skills || []).join(', ')}] with the required skills for target role: ${targetRole}. List missing skills and action steps.`;
+  } else if (type === 'roadmap') {
+    prompt = `Generate a 30, 60, 90-day learning roadmap to transition to target role: ${targetRole} from current skills: [${(context.skills || []).join(', ')}]. Format in markdown.`;
+  } else {
+    prompt = `You are a career assistant for developers. The user is a developer targeting the role of ${targetRole} with Placement readiness score: ${context.placementScore}%. Answer their query: "${context.message}". Keep it professional and helpful.`;
+    
+    if (context.file) {
+      const { originalname, mimetype, path: filePath, size } = context.file;
+      const sizeMB = (size / (1024 * 1024)).toFixed(2);
       
-      const aiText = response.data.candidates[0].content.parts[0].text;
-      if (aiText) return aiText;
-    } catch (e) {
-      console.warn("Gemini API call failed, using high-fidelity local fallback:", e.message);
+      // Determine if file is text-friendly and can be parsed
+      const textFriendlyTypes = [
+        'text/', 'application/json', 'application/javascript', 
+        'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      const isTextFriendly = textFriendlyTypes.some(t => mimetype.includes(t)) || 
+                             ['.txt', '.csv', '.json', '.js', '.ts', '.py', '.html', '.css', '.md', '.pdf', '.docx'].some(ext => originalname.toLowerCase().endsWith(ext));
+      
+      if (isTextFriendly) {
+        try {
+          const { parseResumeFile } = require('./resumeService');
+          const fileContent = await parseResumeFile(filePath);
+          prompt += `\n\n[Attached Document File: ${originalname} (Size: ${sizeMB} MB)]\nHere is the content of the attached document:\n---\n${fileContent}\n---`;
+        } catch (err) {
+          prompt += `\n\n[Attached File: ${originalname} (${mimetype})] - Note: Failed to parse content.`;
+        }
+      } else {
+        // Media files (image, video, audio)
+        prompt += `\n\n[Attached Media/Binary File: ${originalname} (${mimetype}, Size: ${sizeMB} MB)]\nThe user has attached a media or binary file. Acknowledge this attachment in your response.`;
+      }
     }
   }
+
+  const preferred = (process.env.PREFERRED_AI_PROVIDER || 'gemini').toLowerCase().trim();
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
+
+  // Build routing order
+  const routingOrder = [];
+  if (preferred === 'groq') {
+    if (groqKey) routingOrder.push({ name: 'Groq', call: callGroq });
+    if (geminiKey) routingOrder.push({ name: 'Gemini', call: callGemini });
+  } else {
+    if (geminiKey) routingOrder.push({ name: 'Gemini', call: callGemini });
+    if (groqKey) routingOrder.push({ name: 'Groq', call: callGroq });
+  }
+
+  // Execute routing with automatic failover
+  for (const provider of routingOrder) {
+    try {
+      console.log(`[AI SERVICE] Attempting AI generation using ${provider.name}...`);
+      const result = await provider.call(prompt);
+      console.log(`[AI SERVICE] Successfully generated response using ${provider.name}`);
+      return result;
+    } catch (e) {
+      console.warn(`[AI SERVICE] ${provider.name} call failed:`, e.message);
+    }
+  }
+
+  console.warn("[AI SERVICE] All configured API calls failed or no keys configured. Using local fallback engine.");
 
   // --- Premium Local Fallback Engine ---
   if (type === 'review') {

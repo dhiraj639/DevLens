@@ -24,6 +24,30 @@ Click one of the **Quick Prompts** in the sidebar to begin, or type a question b
   const [inputMsg, setInputMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const chatContainerRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate size limit: 20MB
+    const limit = 20 * 1024 * 1024;
+    if (file.size > limit) {
+      alert("File size exceeds 20MB limit. Please upload a smaller file.");
+      e.target.value = null;
+      return;
+    }
+
+    setSelectedFile(file);
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = null;
+    }
+  };
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
@@ -35,22 +59,85 @@ Click one of the **Quick Prompts** in the sidebar to begin, or type a question b
     scrollToBottom();
   }, [messages, loading]);
 
-  const addMessage = (sender, text) => {
-    setMessages((prev) => [...prev, { sender, text, timestamp: new Date() }]);
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const history = await aiService.getChatHistory();
+        if (history && history.length > 0) {
+          setMessages(history);
+        }
+      } catch (err) {
+        console.error("Failed to load chat history:", err);
+      }
+    };
+    loadHistory();
+  }, []);
+
+  const handleClearHistory = async () => {
+    try {
+      await aiService.clearChatHistory();
+      setMessages([
+        {
+          sender: 'ai',
+          text: `Hello! I am your **DevLens AI Assistant** calibrated for the target role: **${targetRole}**. 
+
+I can analyze your GitHub activity, check your LeetCode DSA profile progress, run resume ATS keyword calculations, or generate a custom training curriculum. 
+
+Click one of the **Quick Prompts** in the sidebar to begin, or type a question below!`,
+          timestamp: new Date()
+        }
+      ]);
+    } catch (err) {
+      console.error("Failed to clear chat history:", err);
+    }
+  };
+
+  const addMessage = (sender, text, file = null) => {
+    setMessages((prev) => [...prev, { sender, text, timestamp: new Date(), file }]);
   };
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!inputMsg.trim()) return;
+    if (!inputMsg.trim() && !selectedFile) return;
 
     const userQuery = inputMsg;
+    const fileToUpload = selectedFile;
+
+    // Clear inputs immediately
     setInputMsg('');
-    addMessage('user', userQuery);
+    handleRemoveFile();
+
+    // Add user message with file details to UI thread
+    setMessages((prev) => [...prev, {
+      sender: 'user',
+      text: userQuery,
+      timestamp: new Date(),
+      file: fileToUpload ? {
+        originalname: fileToUpload.name,
+        size: fileToUpload.size,
+        mimetype: fileToUpload.type
+      } : null
+    }]);
+
     setLoading(true);
 
     try {
-      const data = await aiService.chatWithAssistant(userQuery);
-      addMessage('ai', data.reply);
+      let data;
+      if (fileToUpload) {
+        const formData = new FormData();
+        formData.append('message', userQuery);
+        formData.append('file', fileToUpload);
+        data = await aiService.chatWithAssistantMultipart(formData);
+      } else {
+        data = await aiService.chatWithAssistant(userQuery);
+      }
+
+      setMessages((prev) => [...prev, {
+        sender: 'ai',
+        text: data.reply,
+        timestamp: new Date(),
+        file: data.file
+      }]);
     } catch (err) {
       console.error(err);
       addMessage('ai', 'Error communicating with DevLens AI brain. Check backend servers.');
@@ -245,7 +332,7 @@ Click one of the **Quick Prompts** in the sidebar to begin, or type a question b
         </div>
 
         <button
-          onClick={() => setMessages([messages[0]])}
+          onClick={handleClearHistory}
           className="w-full py-2.5 rounded-xl border border-white/5 hover:border-red-500/20 text-slate-500 hover:text-red-400 transition-all text-xs font-bold flex items-center justify-center space-x-1.5"
         >
           <Trash2 className="w-4 h-4" />
@@ -296,6 +383,20 @@ Click one of the **Quick Prompts** in the sidebar to begin, or type a question b
                   ? 'bg-indigo-600/10 border-indigo-500/20 text-slate-200'
                   : 'bg-slate-950/20 border-white/5 text-slate-300 shadow-sm'
               }`}>
+                {msg.file && (
+                  <div className="mb-2.5 p-2 rounded-xl bg-slate-950/40 border border-white/5 flex items-center space-x-2.5 max-w-sm">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-500/15 flex items-center justify-center shrink-0">
+                      <Paperclip className="w-3.5 h-3.5 text-indigo-400" />
+                    </div>
+                    <div className="overflow-hidden text-left">
+                      <p className="font-bold text-white truncate text-[11px]">{msg.file.originalname}</p>
+                      <p className="text-[9px] text-slate-400 font-mono">
+                        {msg.file.size ? `${(msg.file.size / (1024 * 1024)).toFixed(2)} MB` : 'Attached File'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
                 {msg.sender === 'ai' ? (
                   <div>{renderMarkdown(msg.text)}</div>
                 ) : (
@@ -323,9 +424,43 @@ Click one of the **Quick Prompts** in the sidebar to begin, or type a question b
 
         </div>
 
+        {/* Selected file preview bar */}
+        {selectedFile && (
+          <div className="mx-4 mb-2 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center justify-between animate-fadeIn shrink-0">
+            <div className="flex items-center space-x-2.5 overflow-hidden">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0">
+                <Paperclip className="w-4 h-4 text-indigo-400" />
+              </div>
+              <div className="text-left overflow-hidden">
+                <p className="text-xs font-bold text-white truncate">{selectedFile.name}</p>
+                <p className="text-[10px] text-indigo-300 font-medium">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              onClick={handleRemoveFile}
+              className="p-1.5 hover:bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Input panel (Bottom) */}
         <form onSubmit={handleSend} className="p-4 border-t border-white/5 bg-slate-900/10 flex items-center space-x-3">
-          <button type="button" className="p-2.5 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/5 transition-all">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*,video/*,audio/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.csv"
+            className="hidden"
+          />
+
+          <button 
+            type="button" 
+            onClick={() => fileInputRef.current?.click()}
+            className="p-2.5 text-indigo-400 hover:text-indigo-300 rounded-lg hover:bg-white/5 transition-all"
+          >
             <Paperclip className="w-5 h-5" />
           </button>
           
@@ -344,7 +479,7 @@ Click one of the **Quick Prompts** in the sidebar to begin, or type a question b
 
           <button
             type="submit"
-            disabled={loading || !inputMsg.trim()}
+            disabled={loading || (!inputMsg.trim() && !selectedFile)}
             className="btn-primary p-3 rounded-xl text-white shadow-md disabled:opacity-40 disabled:hover:scale-100 shrink-0"
           >
             <Send className="w-4.5 h-4.5" />
