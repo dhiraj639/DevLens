@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { 
   Award, Terminal, FileText, BarChart3, 
   HelpCircle, ChevronRight, Activity, Zap 
@@ -10,13 +10,17 @@ import * as dashboardService from '../services/dashboardService';
 import ScoreCard from '../components/ScoreCard';
 import SkillRadarChart from '../components/SkillRadarChart';
 import LoadingSpinner from '../components/LoadingSpinner';
+import useAuth from '../hooks/useAuth';
 
 const Dashboard = () => {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const location = useLocation();
 
   useEffect(() => {
     const fetchOverview = async () => {
+      setLoading(true);
       try {
         const data = await dashboardService.getOverview();
         setOverview(data);
@@ -27,7 +31,8 @@ const Dashboard = () => {
       }
     };
     fetchOverview();
-  }, []);
+  // Re-fetch whenever user navigates to dashboard (e.g., after updating role in Profile)
+  }, [location.key]);
 
   if (loading) {
     return (
@@ -43,7 +48,9 @@ const Dashboard = () => {
   const leetcodeScore = overview?.leetcodeScore || 0;
   const atsScore = overview?.atsScore || 0;
   const placementReadiness = overview?.placementReadiness || 0;
-  const targetRole = overview?.targetRole || "MERN Developer";
+  // Prefer user.targetRole from AuthContext (updated instantly on Profile save),
+  // fall back to what the API returned, then default.
+  const targetRole = user?.targetRole || overview?.targetRole || "MERN Developer";
 
   // Recharts Bar chart data mapping
   const barChartData = [
