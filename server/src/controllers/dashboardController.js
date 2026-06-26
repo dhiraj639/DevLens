@@ -1,6 +1,7 @@
 const GithubAnalysis = require('../models/GithubAnalysis');
 const LeetcodeAnalysis = require('../models/LeetcodeAnalysis');
 const ResumeAnalysis = require('../models/ResumeAnalysis');
+const User = require('../models/User');
 const { localGithubData } = require('./githubController');
 const { localLeetcodeData } = require('./leetcodeController');
 const { localResumeData } = require('./resumeController');

@@ -12,10 +12,12 @@ const SkillRadarChart = ({ data }) => {
     { subject: 'Comm.', A: 85, fullMark: 100 },
   ];
 
+  const chartKey = chartData.map(d => d.subject).join('-');
+
   return (
     <div className="w-full h-80 flex items-center justify-center">
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart cx="50%" cy="50%" outerRadius="60%" margin={{ top: 10, right: 30, bottom: 10, left: 30 }} data={chartData}>
+        <RadarChart key={chartKey} cx="50%" cy="50%" outerRadius="60%" margin={{ top: 10, right: 30, bottom: 10, left: 30 }} data={chartData}>
           <PolarGrid stroke="rgba(255, 255, 255, 0.05)" />
           <PolarAngleAxis 
             dataKey="subject" 
