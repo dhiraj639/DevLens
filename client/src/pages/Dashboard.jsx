@@ -53,12 +53,12 @@ const Dashboard = () => {
   // fall back to what the API returned, then default.
   const targetRole = user?.targetRole || overview?.targetRole || "MERN Developer";
 
-  // Recharts Bar chart data mapping
+  // Recharts Bar chart data mapping — shortened labels to fit narrow card
   const barChartData = [
-    { name: 'GitHub Score', value: githubScore, fill: '#6366f1' },
-    { name: 'DSA Score', value: leetcodeScore, fill: '#a855f7' },
-    { name: 'ATS Resume', value: atsScore, fill: '#06b6d4' },
-    { name: 'Placement Readiness', value: placementReadiness, fill: '#10b981' }
+    { name: 'GitHub', value: githubScore, fill: '#6366f1' },
+    { name: 'DSA', value: leetcodeScore, fill: '#a855f7' },
+    { name: 'ATS', value: atsScore, fill: '#06b6d4' },
+    { name: 'Readiness', value: placementReadiness, fill: '#10b981' }
   ];
 
   // Radar chart: skill dimension balance based on actual extracted skills vs role requirements
@@ -221,15 +221,23 @@ const Dashboard = () => {
             </span>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <BarChart data={barChartData} margin={{ top: 10, right: 6, left: -25, bottom: 30 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }} 
+                    axisLine={false}
+                    interval={0}
+                    angle={-30}
+                    textAnchor="end"
+                    dy={8}
+                  />
                   <YAxis domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 9 }} axisLine={false} />
                   <Tooltip 
                     contentStyle={{ background: '#0f172a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
                     labelStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                   />
-                  <Bar dataKey="value" fill="#6366f1" radius={[8, 8, 0, 0]} barSize={35} />
+                  <Bar dataKey="value" fill="#6366f1" radius={[8, 8, 0, 0]} barSize={32} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
