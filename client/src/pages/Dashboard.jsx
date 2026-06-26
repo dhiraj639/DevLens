@@ -48,6 +48,7 @@ const Dashboard = () => {
   const leetcodeScore = overview?.leetcodeScore || 0;
   const atsScore = overview?.atsScore || 0;
   const placementReadiness = overview?.placementReadiness || 0;
+  const extractedSkills = overview?.extractedSkills || [];
   // Prefer user.targetRole from AuthContext (updated instantly on Profile save),
   // fall back to what the API returned, then default.
   const targetRole = user?.targetRole || overview?.targetRole || "MERN Developer";
@@ -60,57 +61,70 @@ const Dashboard = () => {
     { name: 'Placement Readiness', value: placementReadiness, fill: '#10b981' }
   ];
 
-  // Radar charts metrics mapping dynamically based on target role
-  const getRadarData = (role, dsaScore, communicationScore) => {
+  // Radar chart: skill dimension balance based on actual extracted skills vs role requirements
+  const getRadarData = (role, dsaScore, atsScore, extractedSkills = []) => {
     const roleLower = role.toLowerCase();
-    
-    // 1. Data Science / ML / Data Engineering / Data Analytics
+    // Normalize user's skills to lowercase for matching
+    const userSkills = extractedSkills.map(s => s.toLowerCase());
+
+    // Helper: given required skills for a dimension, compute % matched from user's actual skills
+    // If no resume uploaded (userSkills empty), fall back to score-based estimation
+    const match = (requiredSkills, fallbackScore = 0) => {
+      if (userSkills.length === 0) return fallbackScore;
+      const matched = requiredSkills.filter(req =>
+        userSkills.some(us => us.includes(req) || req.includes(us))
+      ).length;
+      return Math.round((matched / requiredSkills.length) * 100);
+    };
+
+    // 1. Data Science / ML / Data Engineering / Analytics
     if (
-      roleLower.includes('data') || 
-      roleLower.includes('ml') || 
-      roleLower.includes('machine') || 
-      roleLower.includes('scientist') || 
+      roleLower.includes('data') ||
+      roleLower.includes('ml') ||
+      roleLower.includes('machine') ||
+      roleLower.includes('scientist') ||
       roleLower.includes('analyst')
     ) {
       return [
-        { subject: 'Data Analysis', A: communicationScore > 0 ? Math.round(communicationScore * 0.95) : 75, fullMark: 100 },
-        { subject: 'ML Modeling', A: roleLower.includes('ml') || roleLower.includes('scientist') ? 85 : 45, fullMark: 100 },
-        { subject: 'Data Pipelines', A: roleLower.includes('engineer') || roleLower.includes('data') ? 88 : 50, fullMark: 100 },
-        { subject: 'DSA & Python', A: dsaScore > 0 ? dsaScore : 55, fullMark: 100 },
-        { subject: 'MLOps & SQL', A: roleLower.includes('engineer') ? 80 : 40, fullMark: 100 },
-        { subject: 'Comm.', A: communicationScore > 0 ? communicationScore : 75, fullMark: 100 },
+        { subject: 'Data Analysis',  A: match(['pandas', 'numpy', 'sql', 'excel', 'tableau', 'power bi', 'matplotlib', 'seaborn'], atsScore > 0 ? Math.round(atsScore * 0.8) : 30), fullMark: 100 },
+        { subject: 'ML Modeling',    A: match(['scikit-learn', 'tensorflow', 'pytorch', 'keras', 'xgboost', 'lightgbm', 'machine learning', 'deep learning', 'neural network'], dsaScore > 0 ? Math.round(dsaScore * 0.6) : 20), fullMark: 100 },
+        { subject: 'Data Pipelines', A: match(['spark', 'airflow', 'kafka', 'etl', 'pipeline', 'dbt', 'hadoop', 'pyspark', 'data engineering'], dsaScore > 0 ? Math.round(dsaScore * 0.5) : 20), fullMark: 100 },
+        { subject: 'DSA & Python',   A: match(['python', 'dsa', 'algorithms', 'data structures', 'leetcode', 'competitive'], dsaScore > 0 ? dsaScore : 25), fullMark: 100 },
+        { subject: 'MLOps & SQL',    A: match(['mlops', 'sql', 'postgresql', 'mysql', 'docker', 'kubernetes', 'fastapi', 'flask', 'model deployment', 'mlflow'], atsScore > 0 ? Math.round(atsScore * 0.5) : 15), fullMark: 100 },
+        { subject: 'Comm.',          A: match(['communication', 'presentation', 'stakeholder', 'reporting', 'visualization'], atsScore > 0 ? Math.round(atsScore * 0.9) : 50), fullMark: 100 },
       ];
     }
-    
-    // 2. DevOps / Cloud / SRE
+
+    // 2. DevOps / Cloud / SRE / Infrastructure
     if (
-      roleLower.includes('devops') || 
-      roleLower.includes('cloud') || 
-      roleLower.includes('sre') || 
+      roleLower.includes('devops') ||
+      roleLower.includes('cloud') ||
+      roleLower.includes('sre') ||
       roleLower.includes('infrastructure')
     ) {
       return [
-        { subject: 'CI/CD Pipelines', A: 90, fullMark: 100 },
-        { subject: 'Cloud & IaC', A: 85, fullMark: 100 },
-        { subject: 'Containers', A: 88, fullMark: 100 },
-        { subject: 'Scripting', A: dsaScore > 0 ? Math.round(dsaScore * 0.9) : 60, fullMark: 100 },
-        { subject: 'SysAdmin', A: 75, fullMark: 100 },
-        { subject: 'Comm.', A: communicationScore > 0 ? communicationScore : 75, fullMark: 100 },
+        { subject: 'CI/CD Pipelines', A: match(['ci/cd', 'jenkins', 'github actions', 'gitlab ci', 'circleci', 'pipeline', 'devops'], dsaScore > 0 ? Math.round(dsaScore * 0.7) : 20), fullMark: 100 },
+        { subject: 'Cloud & IaC',     A: match(['aws', 'azure', 'gcp', 'terraform', 'cloudformation', 'ansible', 'pulumi', 'infrastructure as code'], atsScore > 0 ? Math.round(atsScore * 0.7) : 20), fullMark: 100 },
+        { subject: 'Containers',      A: match(['docker', 'kubernetes', 'helm', 'container', 'k8s', 'openshift'], dsaScore > 0 ? Math.round(dsaScore * 0.6) : 15), fullMark: 100 },
+        { subject: 'Scripting',       A: match(['bash', 'shell', 'python', 'linux', 'powershell', 'scripting', 'automation'], dsaScore > 0 ? Math.round(dsaScore * 0.8) : 30), fullMark: 100 },
+        { subject: 'SysAdmin',        A: match(['linux', 'nginx', 'apache', 'networking', 'monitoring', 'prometheus', 'grafana', 'security'], atsScore > 0 ? Math.round(atsScore * 0.6) : 25), fullMark: 100 },
+        { subject: 'Comm.',           A: match(['communication', 'documentation', 'agile', 'scrum'], atsScore > 0 ? Math.round(atsScore * 0.9) : 50), fullMark: 100 },
       ];
     }
-    
-    // 3. Default: Full Stack / Web Developer / Frontend / Backend
+
+    // 3. Default: Full Stack / Web / Frontend / Backend / MERN
     return [
-      { subject: 'Frontend', A: roleLower.includes('frontend') || roleLower.includes('mern') ? 85 : 40, fullMark: 100 },
-      { subject: 'Backend', A: roleLower.includes('backend') || roleLower.includes('mern') ? 80 : 35, fullMark: 100 },
-      { subject: 'DSA', A: dsaScore > 0 ? dsaScore : 45, fullMark: 100 },
-      { subject: 'DevOps', A: roleLower.includes('devops') ? 90 : 35, fullMark: 100 },
-      { subject: 'AI Tech', A: roleLower.includes('ml') || roleLower.includes('science') ? 85 : 50, fullMark: 100 },
-      { subject: 'Comm.', A: communicationScore > 0 ? communicationScore : 75, fullMark: 100 },
+      { subject: 'Frontend', A: match(['react', 'vue', 'angular', 'html', 'css', 'javascript', 'typescript', 'next.js', 'tailwind', 'redux'], roleLower.includes('frontend') || roleLower.includes('mern') ? (atsScore > 0 ? atsScore : 40) : 20), fullMark: 100 },
+      { subject: 'Backend',  A: match(['node.js', 'express', 'django', 'spring', 'fastapi', 'rest api', 'graphql', 'nodejs', 'java', 'golang', 'php'], roleLower.includes('backend') || roleLower.includes('mern') ? (atsScore > 0 ? atsScore : 35) : 15), fullMark: 100 },
+      { subject: 'DSA',      A: match(['dsa', 'algorithms', 'data structures', 'leetcode', 'competitive', 'python', 'java'], dsaScore > 0 ? dsaScore : 20), fullMark: 100 },
+      { subject: 'DevOps',   A: match(['docker', 'kubernetes', 'ci/cd', 'aws', 'deployment', 'nginx', 'git', 'linux'], roleLower.includes('devops') ? (dsaScore > 0 ? dsaScore : 30) : 10), fullMark: 100 },
+      { subject: 'AI Tech',  A: match(['machine learning', 'tensorflow', 'pytorch', 'ai', 'nlp', 'openai', 'langchain'], roleLower.includes('ml') ? (dsaScore > 0 ? dsaScore : 20) : 10), fullMark: 100 },
+      { subject: 'Comm.',    A: match(['communication', 'teamwork', 'agile', 'scrum', 'leadership'], atsScore > 0 ? Math.round(atsScore * 0.9) : 50), fullMark: 100 },
     ];
   };
 
-  const radarData = getRadarData(targetRole, leetcodeScore, atsScore);
+
+  const radarData = getRadarData(targetRole, leetcodeScore, atsScore, extractedSkills);
 
   return (
     <div className="space-y-8 relative z-10 w-full">

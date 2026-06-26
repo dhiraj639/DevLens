@@ -68,6 +68,11 @@ const getDashboardOverview = async (req, res) => {
       placementReadiness = Math.min(98, Math.max(30, placementReadiness));
     }
 
+    // Extracted skills from resume (used for radar skill-gap mapping)
+    const extractedSkills = resumeData
+      ? [...(resumeData.extractedSkills || []), ...(resumeData.skills || [])]
+      : [];
+
     res.status(200).json({
       name: req.user.name,
       email: req.user.email,
@@ -77,6 +82,7 @@ const getDashboardOverview = async (req, res) => {
       leetcodeScore: dsaScore,
       atsScore,
       placementReadiness,
+      extractedSkills,  // actual skills from user's resume
       accountsConnected: {
         github: !!gitData,
         leetcode: !!dsaData,
